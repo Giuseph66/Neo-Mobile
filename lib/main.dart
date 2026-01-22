@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
+import 'ai/config/ai_config_store.dart';
 import 'llm/generation_controller.dart';
 import 'llm/llm_prefs.dart';
 import 'llm/model_registry.dart';
@@ -9,7 +11,9 @@ import 'theme/app_theme.dart';
 import 'inspector_accessibility/presentation/screens/permissions_screen.dart';
 import 'inspector_accessibility/presentation/screens/inspector_home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
   runApp(const ProviderScope(child: LocalLlmApp()));
 }
 
@@ -25,9 +29,10 @@ class _LocalLlmAppState extends ConsumerState<LocalLlmApp> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(aiConfigProvider.notifier).load();
       ref.read(modelRegistryProvider.notifier).refresh();
       ref.read(llmPrefsProvider.notifier).load();
-      ref.read(generationControllerProvider.notifier).attach();
+      ref.read(generationControllerProvider.notifier).initialize();
     });
   }
 

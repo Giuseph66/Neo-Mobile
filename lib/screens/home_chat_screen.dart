@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../ai/config/ai_config_store.dart';
+import '../ai/providers/chat_provider.dart';
+import '../ai/providers/provider_registry.dart';
 import '../llm/generation_controller.dart';
 import '../llm/local_llm_service.dart';
 import '../llm/llm_prefs.dart';
@@ -40,8 +43,16 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(generationControllerProvider);
     final modelState = ref.watch(modelRegistryProvider);
+    final config = ref.watch(aiConfigProvider);
+    final providers = ref.watch(providerRegistryProvider);
     final prefs = ref.watch(llmPrefsProvider);
-    final modelStatus = _statusLabel(modelState);
+    final activeProvider = config.activeProvider;
+    final provider = providers.byId(activeProvider.name);
+    final isLocal = activeProvider == AiProviderId.local;
+    final modelLabel =
+        _resolveModelLabel(activeProvider, provider, config, modelState);
+    final providerStatus =
+        _resolveProviderStatus(activeProvider, config, modelState);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -90,7 +101,7 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
       ),
       body: Column(
         children: [
-          if (modelStatus.needsAttention)
+          if (providerStatus.needsAttention)
             Padding(
               padding: const EdgeInsets.all(12),
               child: NeonCard(
@@ -101,15 +112,15 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            modelStatus.title,
+                            providerStatus.title,
                             style: const TextStyle(
                               color: AppColors.text1,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
-                            'Importe ou baixe um modelo GGUF para iniciar.',
+                          Text(
+                            providerStatus.message,
                             style: TextStyle(color: AppColors.text2),
                           ),
                         ],
@@ -127,25 +138,29 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
                   ],
                 ),
               ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  StatusBadge(
-                    label: modelStatus.title,
-                    color: modelStatus.color,
-                  ),
-                  const SizedBox(width: 8),
-                  if (modelState.activeModel != null)
-                    Text(
-                      modelState.activeModel!.name,
-                      style: const TextStyle(color: AppColors.text2),
-                    ),
-                ],
-              ),
             ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                StatusBadge(
+                  label: provider.displayName,
+                  color: AppColors.primary,
+                ),
+                if (modelLabel.isNotEmpty)
+                  StatusBadge(
+                    label: modelLabel,
+                    color: AppColors.primary2,
+                  ),
+                StatusBadge(
+                  label: providerStatus.title,
+                  color: providerStatus.color,
+                ),
+              ],
+            ),
+          ),
           if (_showPerf) _buildPerfCard(),
           Expanded(
             child: ListView.builder(
@@ -161,12 +176,22 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
             controller: _controller,
             isGenerating: chatState.isGenerating,
             onSend: () {
-              if (modelState.activeModelId == null) {
-                _showSnack('Selecione um modelo local primeiro.');
+              if (isLocal) {
+                if (modelState.activeModelId == null) {
+                  _showSnack('Selecione um modelo local primeiro.');
+                  return;
+                }
+                if (!modelState.activeLoaded) {
+                  _showSnack('Carregue o modelo antes de gerar.');
+                  return;
+                }
+              } else if (activeProvider == AiProviderId.openai &&
+                  !config.openAiKeyPresent) {
+                _showSnack('Configure a API key da OpenAI.');
                 return;
-              }
-              if (!modelState.activeLoaded) {
-                _showSnack('Carregue o modelo antes de gerar.');
+              } else if (activeProvider == AiProviderId.gemini &&
+                  !config.geminiKeyPresent) {
+                _showSnack('Configure a API key do Gemini.');
                 return;
               }
               ref
@@ -184,25 +209,65 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
     );
   }
 
-  _ModelStatus _statusLabel(ModelRegistryState state) {
-    if (state.activeModelId == null) {
-      return const _ModelStatus(
-        title: 'SEM MODELO',
+  String _resolveModelLabel(
+    AiProviderId providerId,
+    IChatProvider provider,
+    AiConfigState config,
+    ModelRegistryState modelState,
+  ) {
+    if (providerId == AiProviderId.local) {
+      return modelState.activeModel?.name ??
+          config.activeModels[AiProviderId.local] ??
+          'Sem modelo';
+    }
+    return config.activeModels[providerId] ?? provider.supportedModels.first;
+  }
+
+  _ProviderStatus _resolveProviderStatus(
+    AiProviderId providerId,
+    AiConfigState config,
+    ModelRegistryState modelState,
+  ) {
+    if (providerId == AiProviderId.local) {
+      if (modelState.activeModelId == null) {
+        return const _ProviderStatus(
+          title: 'SEM MODELO',
+          color: AppColors.danger,
+          needsAttention: true,
+          message: 'Importe ou baixe um modelo GGUF para iniciar.',
+        );
+      }
+      if (!modelState.activeLoaded) {
+        return const _ProviderStatus(
+          title: 'PENDENTE',
+          color: AppColors.primary,
+          needsAttention: false,
+          message: 'Carregue o modelo para iniciar a geracao.',
+        );
+      }
+      return const _ProviderStatus(
+        title: 'ATIVADO',
+        color: AppColors.success,
+        needsAttention: false,
+        message: 'Modelo local ativo.',
+      );
+    }
+    final keyPresent = providerId == AiProviderId.openai
+        ? config.openAiKeyPresent
+        : config.geminiKeyPresent;
+    if (!keyPresent) {
+      return const _ProviderStatus(
+        title: 'SEM CHAVE',
         color: AppColors.danger,
         needsAttention: true,
+        message: 'Adicione a API key para usar este provider.',
       );
     }
-    if (!state.activeLoaded) {
-      return const _ModelStatus(
-        title: 'PENDENTE',
-        color: AppColors.primary,
-        needsAttention: false,
-      );
-    }
-    return const _ModelStatus(
-      title: 'ATIVADO',
+    return const _ProviderStatus(
+      title: 'CONECTADO',
       color: AppColors.success,
       needsAttention: false,
+      message: 'Provider remoto ativo.',
     );
   }
 
@@ -344,14 +409,16 @@ class _HomeChatScreenState extends ConsumerState<HomeChatScreen> {
   }
 }
 
-class _ModelStatus {
-  const _ModelStatus({
+class _ProviderStatus {
+  const _ProviderStatus({
     required this.title,
     required this.color,
     required this.needsAttention,
+    required this.message,
   });
 
   final String title;
   final Color color;
   final bool needsAttention;
+  final String message;
 }

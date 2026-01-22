@@ -1,6 +1,9 @@
-# Chat Local LLM (Offline)
+# Chat Local LLM + OpenAI + Gemini
 
-Modulo Flutter + Android para chat local com LLM rodando offline no dispositivo.
+Modulo Flutter + Android para chat com 3 providers selecionaveis:
+- Local LLM (GGUF) rodando offline no dispositivo.
+- OpenAI (texto via API).
+- Google Gemini (texto via API).
 
 ## Como rodar
 
@@ -11,7 +14,9 @@ flutter run
 
 ## Funcionalidades
 
-- Chat estilo ChatGPT com streaming de tokens.
+- Chat estilo ChatGPT com streaming de tokens no modo local.
+- Providers: Local, OpenAI e Gemini.
+- Indicador de tokens/s no chat para o LLM local.
 - Modelos GGUF locais com perfis de desempenho.
 - Lista de modelos recomendados embutida no app.
 - Importar modelo por arquivo ou baixar por URL (menu de tres pontos).
@@ -19,10 +24,19 @@ flutter run
 
 ## Como usar
 
+### Local LLM
+
 1) Abra Configuracoes > Modelos locais.
 2) Escolha um modelo recomendado e baixe, ou use o menu "..." para importar.
 3) Selecione e carregue o modelo.
 4) Volte ao chat e envie mensagens.
+
+### OpenAI / Gemini
+
+1) Abra Configuracoes > API e Modelos.
+2) Escolha a aba OpenAI ou Google Gemini.
+3) Salve a API key e selecione o modelo.
+4) Clique em "Ativar Modelo".
 
 ## Modelos recomendados
 
@@ -44,11 +58,7 @@ No limite:
 
 ## Android (LLM local)
 
-A integracao usa JNI com stub local. Para ativar inferencia real:
-
-1) Adicione o codigo do llama.cpp em `android/llama/`.
-2) Atualize `android/app/src/main/cpp/CMakeLists.txt` para compilar o llama.cpp.
-3) Implemente as funcoes nativas em `llama_jni.cpp` para carregar e gerar tokens.
+A integracao usa JNI com llama.cpp compilado para arm64-v8a.
 
 ## Canais Flutter <-> Android
 
@@ -78,13 +88,15 @@ EventChannel: `local_llm_events`
 
 - `lib/theme/`: cores e tema neon.
 - `lib/llm/`: service, registry, prefs, generation.
+- `lib/ai/`: providers (local/openai/gemini) e configuracao.
 - `lib/screens/`: hub, chat e settings.
 - `lib/widgets/`: cards, badges e componentes.
 - `android/app/src/main/kotlin/com/example/neo/llm/`: engine e plugin.
-- `android/app/src/main/cpp/`: JNI stub.
+- `android/app/src/main/cpp/`: JNI llama.cpp.
 
 ## Limitacoes
 
-- Stub JNI apenas ecoa o prompt. Necessario integrar llama.cpp para inferencia real.
+- Modelos grandes exigem bastante RAM e podem ser lentos em celulares mais fracos.
+- OpenAI/Gemini exigem internet e uma API key valida.
 - Modelos grandes exigem bastante RAM.
 # Neo-Mobile

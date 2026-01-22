@@ -14,7 +14,7 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selected = ref.watch(settingsSectionProvider);
     final sections = const [
-      'Modelos locais',
+      'API e Modelos',
       'Desempenho',
       'Privacidade',
       'Ajuda',
@@ -91,7 +91,7 @@ class SettingsScreen extends ConsumerWidget {
       case 3:
         return const _PlaceholderSection(
           title: 'Ajuda',
-          body: 'Importe um GGUF e carregue o modelo para iniciar.',
+          body: 'Selecione um provider e carregue o modelo.',
         );
       default:
         return const SizedBox.shrink();

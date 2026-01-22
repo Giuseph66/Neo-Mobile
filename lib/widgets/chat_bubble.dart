@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../llm/generation_controller.dart';
+import '../ai/models/chat_message.dart';
 import '../theme/app_colors.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -10,7 +10,7 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUser = message.role == MessageRole.user;
+    final isUser = message.role == ChatRole.user;
     final align = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final color = isUser ? AppColors.surface1 : AppColors.surface0;
     final borderColor = isUser ? AppColors.outline1 : AppColors.outline0;
