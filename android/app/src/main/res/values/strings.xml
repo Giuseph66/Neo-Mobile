@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Inspector Mode: Ferramenta de inspeção visual e teste para desenvolvedores. Permite visualizar elementos da interface e executar ações de teste em apps. Não captura texto digitado nem dados sensíveis.</string>
+</resources>
+
