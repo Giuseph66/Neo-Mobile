@@ -62,9 +62,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                 children: [
                   _buildStatusCard(),
                   const SizedBox(height: 24),
-                  _buildTransparencySection(),
-                  const SizedBox(height: 24),
                   _buildActionsSection(),
+                  const SizedBox(height: 24),
+                  _buildTransparencySection(),
                 ],
               ),
             ),

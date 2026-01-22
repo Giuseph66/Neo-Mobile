@@ -45,6 +45,7 @@ class AppHubScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const OverlayInspectorScreen()),
             ),
           ),
+          /*
           const SizedBox(height: 12),
           _HubCard(
             title: 'Inspector Accessibility',
@@ -53,6 +54,7 @@ class AppHubScreen extends StatelessWidget {
             cta: 'Abrir Fluxo',
             onTap: () => Navigator.of(context).pushNamed('/permissions'),
           ),
+           */
         ],
       ),
     );
