@@ -2,6 +2,7 @@ package com.example.neo
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -9,6 +10,7 @@ import android.os.IBinder
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -16,9 +18,13 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var bubbleView: FloatingBubbleView? = null
     private var menuView: LinearLayout? = null
+    private var autoClickerView: AutoClickerView? = null
     private lateinit var bubbleParams: WindowManager.LayoutParams
     private var menuParams: WindowManager.LayoutParams? = null
     private val prefs by lazy { getSharedPreferences(PREFS_NAME, MODE_PRIVATE) }
+    private var isInspectorActive = false
+    private var showBoxes = true
+    private var showTexts = false
 
     override fun onCreate() {
         super.onCreate()
@@ -38,6 +44,7 @@ class OverlayService : Service() {
     override fun onDestroy() {
         removeBubble()
         removeMenu()
+        autoClickerView?.hide()
         OverlayPlugin.emitEvent("service_stopped")
         super.onDestroy()
     }
@@ -92,33 +99,44 @@ class OverlayService : Service() {
     }
 
     private fun showMenu() {
+        removeMenu()
         val menu = LinearLayout(this)
         menu.orientation = LinearLayout.VERTICAL
         val background = GradientDrawable()
-        background.cornerRadius = dp(12).toFloat()
+        background.cornerRadius = dp(16).toFloat()
         background.setColor(0xFF111827.toInt())
         background.setStroke(dp(1), 0xFF374151.toInt())
         menu.background = background
-        menu.elevation = dp(8).toFloat()
+        menu.elevation = dp(12).toFloat()
+        menu.setPadding(dp(4), dp(4), dp(4), dp(4))
 
-        menu.addView(menuItem("Abrir App") {
+        menu.addView(menuItem("Abrir App", android.R.drawable.ic_menu_edit) {
             openApp()
             removeMenu()
         })
-        menu.addView(menuDivider())
-        menu.addView(menuItem("Atalhos") {
-            OverlayPlugin.emitEvent("open_shortcuts")
-            openApp()
+        
+        menu.addView(menuItem("Atalhos (AutoClicker)", android.R.drawable.ic_menu_compass) {
+            toggleAutoClicker()
             removeMenu()
         })
+
+        if (!isInspectorActive) {
+            menu.addView(menuItem("Ativar Inspector", android.R.drawable.ic_menu_search) {
+                activateInspector()
+                showMenu() // Refresh menu to show sub-options
+            })
+        } else {
+            menu.addView(menuItem("Configurações do Inspector", android.R.drawable.ic_menu_preferences) {
+                showInspectorSettings()
+            })
+            menu.addView(menuItem("Desativar Inspector", android.R.drawable.ic_menu_close_clear_cancel) {
+                deactivateInspector()
+                showMenu()
+            })
+        }
+
         menu.addView(menuDivider())
-        menu.addView(menuItem("Ativar Inspector") {
-            OverlayPlugin.emitEvent("activate_inspector")
-            openApp()
-            removeMenu()
-        })
-        menu.addView(menuDivider())
-        menu.addView(menuItem("Desativar Overlay") {
+        menu.addView(menuItem("Fechar Overlay", android.R.drawable.ic_menu_delete, 0xFFEF4444.toInt()) {
             removeMenu()
             stopSelf()
         })
@@ -139,16 +157,90 @@ class OverlayService : Service() {
         windowManager.addView(menu, menuParams)
     }
 
-    private fun removeMenu() {
-        menuView?.let { view ->
-            try {
-                windowManager.removeView(view)
-            } catch (ignored: IllegalArgumentException) {
-                // View already removed.
-            }
+    private fun showInspectorSettings() {
+        removeMenu()
+        val menu = LinearLayout(this)
+        menu.orientation = LinearLayout.VERTICAL
+        val background = GradientDrawable()
+        background.cornerRadius = dp(16).toFloat()
+        background.setColor(0xFF1F2937.toInt())
+        background.setStroke(dp(1), 0xFF3B82F6.toInt())
+        menu.background = background
+        menu.setPadding(dp(4), dp(4), dp(4), dp(4))
+
+        menu.addView(menuItem(if (showBoxes) "Ocultar Boxes" else "Exibir Boxes", android.R.drawable.checkbox_on_background) {
+            showBoxes = !showBoxes
+            InspectorAccessibilityService.getInstance()?.setOverlayVisible(showBoxes)
+            showInspectorSettings()
+        })
+
+        menu.addView(menuItem(if (showTexts) "Ocultar Textos" else "Exibir Textos", android.R.drawable.ic_menu_sort_alphabetically) {
+            showTexts = !showTexts
+            InspectorAccessibilityService.getInstance()?.setTextVisible(showTexts)
+            showInspectorSettings()
+        })
+
+        menu.addView(menuDivider())
+        menu.addView(menuItem("Voltar", android.R.drawable.ic_menu_revert) {
+            showMenu()
+        })
+
+        menuView = menu
+        menuParams = createLayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = bubbleParams.x + dp(68)
+            y = bubbleParams.y
         }
-        menuView = null
-        menuParams = null
+        windowManager.addView(menu, menuParams)
+    }
+
+    private fun activateInspector() {
+        isInspectorActive = true
+        InspectorAccessibilityService.getInstance()?.setInspectorEnabled(true)
+        InspectorAccessibilityService.getInstance()?.setOverlayVisible(showBoxes)
+        InspectorAccessibilityService.getInstance()?.setTextVisible(showTexts)
+        removeMenu()
+    }
+
+    private fun deactivateInspector() {
+        isInspectorActive = false
+        InspectorAccessibilityService.getInstance()?.setInspectorEnabled(false)
+        removeMenu()
+    }
+
+    private fun toggleAutoClicker() {
+        if (autoClickerController == null) {
+            val service = InspectorAccessibilityService.getInstance()
+            if (service == null) {
+                OverlayPlugin.emitEvent("error: accessibility_service_not_running")
+                return
+            }
+            autoClickerController = AutoClickerController(service)
+        }
+
+        if (autoClickerView == null) {
+            autoClickerView = AutoClickerView(this, autoClickerController!!, windowManager) {
+                autoClickerView = null
+            }
+            autoClickerView?.show()
+        } else {
+            autoClickerView?.hide()
+            autoClickerView = null
+        }
+    }
+
+    private var autoClickerController: AutoClickerController? = null
+
+    private fun removeMenu() {
+        if (menuView == null) return
+        try {
+            windowManager.removeView(menuView)
+        } catch (e: Exception) {
+            // View might already be removed or detached
+        } finally {
+            menuView = null
+            menuParams = null
+        }
     }
 
     private fun updateMenuPosition(bubbleX: Int, bubbleY: Int) {
@@ -166,14 +258,27 @@ class OverlayService : Service() {
         }
     }
 
-    private fun menuItem(title: String, onClick: () -> Unit): View {
+    private fun menuItem(title: String, iconRes: Int, color: Int = Color.WHITE, onClick: () -> Unit): View {
+        val layout = LinearLayout(this)
+        layout.orientation = LinearLayout.HORIZONTAL
+        layout.gravity = Gravity.CENTER_VERTICAL
+        layout.setPadding(dp(16), dp(12), dp(16), dp(12))
+        layout.setOnClickListener { onClick() }
+
+        val icon = ImageView(this)
+        icon.setImageResource(iconRes)
+        icon.setColorFilter(color)
+        val iconParams = LinearLayout.LayoutParams(dp(20), dp(20))
+        iconParams.marginEnd = dp(12)
+        layout.addView(icon, iconParams)
+
         val textView = TextView(this)
         textView.text = title
-        textView.setTextColor(0xFFFFFFFF.toInt())
+        textView.setTextColor(color)
         textView.textSize = 14f
-        textView.setPadding(dp(16), dp(12), dp(16), dp(12))
-        textView.setOnClickListener { onClick() }
-        return textView
+        layout.addView(textView)
+
+        return layout
     }
 
     private fun menuDivider(): View {
@@ -182,8 +287,9 @@ class OverlayService : Service() {
             LinearLayout.LayoutParams.MATCH_PARENT,
             dp(1)
         )
+        params.setMargins(dp(8), dp(4), dp(8), dp(4))
         divider.layoutParams = params
-        divider.setBackgroundColor(0xFF1F2937.toInt())
+        divider.setBackgroundColor(0xFF374151.toInt())
         return divider
     }
 

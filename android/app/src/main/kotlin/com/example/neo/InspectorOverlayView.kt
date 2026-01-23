@@ -88,21 +88,41 @@ class InspectorOverlayView(context: Context) : View(context) {
         invalidate()
     }
 
+    private val textWidthCache = mutableMapOf<String, Float>()
+    private var lastNodesHash: Int = 0
+
+    private var highlightedNodeId: String? = null
+
+    fun setHighlightedNode(nodeId: String?) {
+        highlightedNodeId = nodeId
+        // Also center the aim position on this node if needed, or just repaint
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // Desenhar fundo translúcido (opcional)
-        // canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paintBackground)
+        // Clear cache if nodes changed significantly
+        val currentNodesHash = nodes.hashCode()
+        if (currentNodesHash != lastNodesHash) {
+            textWidthCache.clear()
+            lastNodesHash = currentNodesHash
+        }
 
-        // Desenhar bounding boxes
-        // Ajustar bounds subtraindo a altura da barra de status
         for (node in nodes) {
             val paint = when {
-                node.id == selectedNodeId -> paintSelected
-                node.id == aimedNodeId -> paintAimed
+                node.id == highlightedNodeId -> paintSelected // Green for list selection
+                node.id == selectedNodeId -> paintDefault // Previously selected, keep standard
                 else -> paintDefault
             }
-            // Subtrair altura da barra de status para corrigir offset
+            
+            // If highlighted, increase stroke width
+            if (node.id == highlightedNodeId) {
+                paint.strokeWidth = 10f
+            } else {
+                paint.strokeWidth = 4f
+            }
+            
             val adjustedTop = node.bounds.top - statusBarHeight
             val adjustedBottom = node.bounds.bottom - statusBarHeight
             val left = node.bounds.left.toFloat()
@@ -112,45 +132,44 @@ class InspectorOverlayView(context: Context) : View(context) {
             
             canvas.drawRect(left, top, right, bottom, paint)
             
-            // Desenhar texto se habilitado e se o node tiver texto
-            if (showText && !node.text.isNullOrBlank()) {
-                var text = node.text ?: ""
-                // Limitar tamanho do texto para não poluir a tela (máximo 50 caracteres)
-                if (text.length > 50) {
-                    text = text.substring(0, 47) + "..."
+            // Only draw text for highlighted node to reduce clutter? Or all?
+            // Let's draw text if enabled OR if highlighted
+            if ((showText || node.id == highlightedNodeId) && !node.text.isNullOrBlank()) {
+                 val text = node.text!!
+                val cacheKey = "${node.id}_$text"
+                
+                // Measure only once or if changed
+                val textWidth = textWidthCache.getOrPut(cacheKey) {
+                    paintText.measureText(if (text.length > 50) text.substring(0, 47) + "..." else text)
                 }
                 
-                val textWidth = paintText.measureText(text)
                 val textHeight = paintText.descent() - paintText.ascent()
+                val textX = left + 8f
+                val textY = bottom - 8f
                 
-                // Calcular posição: parte inferior interna do box
-                val textX = left + 8f // Margem esquerda
-                val textY = bottom - 8f // Margem inferior
-                
-                // Garantir que o texto não ultrapasse o box
-                val maxTextWidth = right - left - 16f // Margem de 8px de cada lado
+                val maxTextWidth = right - left - 16f
+                if (maxTextWidth <= 0) continue
+
                 val displayText = if (textWidth > maxTextWidth) {
-                    // Truncar texto se necessário
+                    // Still need to truncate if box is small, but let's at least cache basic width
                     var truncated = text
-                    while (paintText.measureText(truncated + "...") > maxTextWidth && truncated.isNotEmpty()) {
+                    if (truncated.length > 50) truncated = truncated.substring(0, 47) + "..."
+                    while (paintText.measureText(truncated) > maxTextWidth && truncated.isNotEmpty()) {
                         truncated = truncated.dropLast(1)
                     }
-                    truncated + "..."
+                    truncated
                 } else {
-                    text
+                    if (text.length > 50) text.substring(0, 47) + "..." else text
                 }
                 
-                val finalTextWidth = paintText.measureText(displayText)
+                val finalWidth = paintText.measureText(displayText)
                 
-                // Desenhar fundo do texto (retângulo semi-transparente)
                 val padding = 4f
                 val bgLeft = textX - padding
                 val bgTop = textY - textHeight - padding
-                val bgRight = textX + finalTextWidth + padding
+                val bgRight = textX + finalWidth + padding
                 val bgBottom = textY + padding
                 canvas.drawRect(bgLeft, bgTop, bgRight, bgBottom, paintTextBackground)
-                
-                // Desenhar texto
                 canvas.drawText(displayText, textX, textY, paintText)
             }
         }
@@ -169,7 +188,27 @@ class InspectorOverlayView(context: Context) : View(context) {
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
-        // Retornar false para permitir que toques passem através do overlay
-        return false
+        if (event?.action == MotionEvent.ACTION_DOWN) {
+            val x = event.x.toInt()
+            val y = event.y.toInt()
+            
+            // Find top-most node at (x, y)
+             val adjustedY = y + statusBarHeight
+            // Iterate in reverse to find top-most
+            for (i in nodes.indices.reversed()) {
+                val node = nodes[i]
+                if (node.bounds.contains(x, adjustedY)) {
+                    val service = context as? InspectorAccessibilityService ?: InspectorAccessibilityService.getInstance()
+                    service?.onNodePicked(node.id)
+                    return true
+                }
+            }
+            // If no node found, maybe cancel picker? Or just ignore.
+            // Let's allow clicking "nowhere" to cancel if needed, or just do nothing.
+             val service = context as? InspectorAccessibilityService ?: InspectorAccessibilityService.getInstance()
+             service?.onNodePicked("") // Empty string to signal cancel/no selection
+             return true
+        }
+        return true // Consume all events to prevent interacting with app below while picking
     }
 }
