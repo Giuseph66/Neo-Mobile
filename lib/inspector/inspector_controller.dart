@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'inspector_websocket_client.dart';
 
 import 'inspector_node.dart';
 import 'inspector_registry.dart';
@@ -8,6 +12,10 @@ enum InspectorMode { highlight, list }
 enum InspectorFilter { all, buttons, inputs, tappable }
 
 class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
+  InspectorController() : _webSocketClient = InspectorWebSocketClient() {
+    _webSocketClient.onStatusChanged = notifyListeners;
+  }
+
   bool _enabled = false;
   bool _showRects = true;
   InspectorMode _mode = InspectorMode.highlight;
@@ -15,6 +23,9 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
   InspectorNode? _selectedNode;
   List<InspectorNode> _nodes = const [];
   List<InspectorNode> _allNodes = const [];
+  final InspectorWebSocketClient _webSocketClient;
+  bool _streamingEnabled = false;
+  String _streamUrl = 'ws://192.168.0.25:7071';
 
   bool get enabled => _enabled;
   bool get showRects => _showRects;
@@ -22,6 +33,10 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
   InspectorFilter get filter => _filter;
   InspectorNode? get selectedNode => _selectedNode;
   List<InspectorNode> get nodes => _nodes;
+  bool get streamingEnabled => _streamingEnabled;
+  bool get streamingConnected => _webSocketClient.connected;
+  bool get streamingConnecting => _webSocketClient.connecting;
+  String get streamUrl => _streamUrl;
 
   void setEnabled(bool value) {
     if (_enabled == value) {
@@ -31,11 +46,15 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
     if (value) {
       WidgetsBinding.instance.addObserver(this);
       _scheduleRefresh();
+      if (_streamingEnabled) {
+        unawaited(_webSocketClient.ensureConnected(_streamUrl));
+      }
     } else {
       WidgetsBinding.instance.removeObserver(this);
       _selectedNode = null;
       _nodes = const [];
       _allNodes = const [];
+      unawaited(_webSocketClient.disconnect());
     }
     notifyListeners();
   }
@@ -55,6 +74,7 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
     _filter = filter;
     _applyFilter();
     notifyListeners();
+    _sendSnapshot();
   }
 
   void toggleRects() {
@@ -64,6 +84,31 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
 
   void selectNode(InspectorNode? node) {
     _selectedNode = node;
+    notifyListeners();
+    _sendSnapshot();
+  }
+
+  void setStreamingEnabled(bool value) {
+    if (_streamingEnabled == value) {
+      return;
+    }
+    _streamingEnabled = value;
+    if (_streamingEnabled && _enabled) {
+      unawaited(_webSocketClient.ensureConnected(_streamUrl));
+    } else {
+      unawaited(_webSocketClient.disconnect());
+    }
+    notifyListeners();
+  }
+
+  void setStreamUrl(String url) {
+    if (url.isEmpty || url == _streamUrl) {
+      return;
+    }
+    _streamUrl = url;
+    if (_streamingEnabled && _enabled) {
+      unawaited(_webSocketClient.ensureConnected(_streamUrl));
+    }
     notifyListeners();
   }
 
@@ -116,6 +161,7 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
     _nodes = _filterNodes(_allNodes);
     _syncSelected(_allNodes);
     notifyListeners();
+    _sendSnapshot();
   }
 
   void _applyFilter() {
@@ -154,6 +200,49 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void _sendSnapshot() {
+    if (!_streamingEnabled || !_enabled) {
+      return;
+    }
+    if (!_webSocketClient.connected) {
+      if (!_webSocketClient.connecting) {
+        unawaited(_webSocketClient.ensureConnected(_streamUrl));
+      }
+      return;
+    }
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final logicalSize = view.physicalSize / view.devicePixelRatio;
+    final payload = <String, dynamic>{
+      'type': 'snapshot',
+      'timestamp': DateTime.now().toIso8601String(),
+      'screen': {
+        'width': logicalSize.width,
+        'height': logicalSize.height,
+        'pixelRatio': view.devicePixelRatio,
+      },
+      'selectedId': _selectedNode?.id,
+      'nodes': _nodes
+          .map(
+            (node) => {
+              'id': node.id,
+              'rect': {
+                'left': node.rect.left,
+                'top': node.rect.top,
+                'width': node.rect.width,
+                'height': node.rect.height,
+              },
+              'widgetType': node.widgetType,
+              'category': node.category.name,
+              'label': node.label,
+              'widgetKey': node.widgetKey,
+              'parentWidgetType': node.parentWidgetType,
+            },
+          )
+          .toList(growable: false),
+    };
+    _webSocketClient.sendJson(payload);
+  }
+
   @override
   void didChangeMetrics() {
     _scheduleRefresh();
@@ -162,6 +251,7 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_webSocketClient.disconnect());
     super.dispose();
   }
 }

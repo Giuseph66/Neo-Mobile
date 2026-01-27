@@ -14,6 +14,7 @@ class InspectorHomeScreen extends StatefulWidget {
 class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsBindingObserver {
   late final AccessibilityInspectorController _controller;
   bool _checkingPermissions = false;
+  final TextEditingController _wsController = TextEditingController();
 
   @override
   void initState() {
@@ -21,6 +22,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
     WidgetsBinding.instance.addObserver(this);
     _controller = AccessibilityInspectorController();
     _controller.addListener(_onControllerChanged);
+    _wsController.text = _controller.streamUrl;
     
     // Verificar permissões e iniciar automaticamente se já estiver habilitado
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -33,6 +35,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
     WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    _wsController.dispose();
     super.dispose();
   }
 
@@ -218,8 +221,87 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
                 ),
               ],
             ),
+          const SizedBox(height: 16),
+          _buildStreamingControls(),
         ],
       ),
+    );
+  }
+
+  Widget _buildStreamingControls() {
+    final connected = _controller.streamingConnected;
+    final connecting = _controller.streamingConnecting;
+    final statusLabel = connected
+        ? 'Conectado'
+        : connecting
+            ? 'Conectando...'
+            : 'Desconectado';
+    final statusColor = connected
+        ? Colors.green
+        : connecting
+            ? Colors.orange
+            : Colors.grey;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Streaming WebSocket',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                statusLabel,
+                style: TextStyle(color: statusColor, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _wsController,
+          decoration: const InputDecoration(
+            labelText: 'URL do WebSocket',
+            hintText: 'ws://10.0.2.2:7071',
+          ),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) {
+            _controller.setStreamUrl(value.trim());
+          },
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Switch(
+              value: _controller.streamingEnabled,
+              onChanged: (value) {
+                _controller.setStreamingEnabled(value);
+              },
+            ),
+            const Text('Enviar boxes para o servidor'),
+            const Spacer(),
+            OutlinedButton(
+              onPressed: () {
+                _controller.setStreamUrl(_wsController.text.trim());
+              },
+              child: const Text('Aplicar URL'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Use o IP do seu PC (ou 10.0.2.2 no emulador).',
+          style: TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+      ],
     );
   }
 

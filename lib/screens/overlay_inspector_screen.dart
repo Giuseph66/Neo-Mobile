@@ -22,6 +22,7 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
   final InspectorController _inspectorController = InspectorController();
   final OverlayController _overlayController = OverlayController();
   final AccessibilityInspectorController _accessibilityController = AccessibilityInspectorController();
+  final TextEditingController _wsController = TextEditingController();
 
   OverlayStatus _status = const OverlayStatus(
     hasPermission: false,
@@ -35,6 +36,7 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _wsController.text = _inspectorController.streamUrl;
     _refreshStatus();
     _eventSub = _overlayController.events.listen(_handleEvent);
   }
@@ -45,6 +47,7 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
     _eventSub?.cancel();
     _inspectorController.dispose();
     _accessibilityController.dispose();
+    _wsController.dispose();
     super.dispose();
   }
 
@@ -200,6 +203,8 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
         _buildPermissionCard(),
         const SizedBox(height: 16),
         _buildServiceCard(),
+        const SizedBox(height: 16),
+        _buildStreamingCard(),
       ],
     );
   }
@@ -291,6 +296,107 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildStreamingCard() {
+    return AnimatedBuilder(
+      animation: _inspectorController,
+      builder: (context, _) {
+        final connected = _inspectorController.streamingConnected;
+        final connecting = _inspectorController.streamingConnecting;
+        final statusLabel = connected
+            ? 'Conectado'
+            : connecting
+                ? 'Conectando...'
+                : 'Desconectado';
+        final statusColor = connected
+            ? AppColors.success
+            : connecting
+                ? AppColors.primary2
+                : AppColors.text2;
+
+        return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Streaming (WebSocket)',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _wsController,
+                  decoration: const InputDecoration(
+                    labelText: 'URL do WebSocket',
+                    hintText: 'ws://10.0.2.2:7071',
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (value) {
+                    _inspectorController.setStreamUrl(value.trim());
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text(
+                      'Enviar boxes',
+                      style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                    ),
+                    const SizedBox(width: 12),
+                    Switch(
+                      value: _inspectorController.streamingEnabled,
+                      onChanged: (value) {
+                        _inspectorController.setStreamingEnabled(value);
+                      },
+                      activeColor: const Color(0xFF2E67FF),
+                    ),
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () {
+                        _inspectorController.setStreamUrl(_wsController.text.trim());
+                      },
+                      child: const Text('Aplicar URL'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Use o IP do seu PC (ou 10.0.2.2 no emulador Android).',
+                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

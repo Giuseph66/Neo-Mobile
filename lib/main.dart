@@ -8,6 +8,7 @@ import 'llm/llm_prefs.dart';
 import 'llm/model_registry.dart';
 import 'screens/app_hub_screen.dart';
 import 'theme/app_theme.dart';
+import 'chat_control/screens/chat_control_screen.dart';
 import 'inspector_accessibility/presentation/screens/permissions_screen.dart';
 import 'inspector_accessibility/presentation/screens/inspector_home_screen.dart';
 
@@ -39,12 +40,13 @@ class _LocalLlmAppState extends ConsumerState<LocalLlmApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Chat Local LLM',
+      title: 'Neo',
       theme: AppTheme.dark(),
       home: const AppHubScreen(),
       routes: {
         '/permissions': (context) => const PermissionsScreen(),
         '/inspector': (context) => const InspectorHomeScreen(),
+        '/chat-control': (context) => const ChatControlScreen(),
       },
     );
   }

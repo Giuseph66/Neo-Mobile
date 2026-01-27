@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../widgets/neon_card.dart';
+import '../chat_control/screens/chat_control_screen.dart';
+import 'settings/app_settings_screen.dart';
 import 'home_chat_screen.dart';
 import 'overlay_inspector_screen.dart';
 
@@ -13,6 +15,17 @@ class AppHubScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Neurelix Lab'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Configurações',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AppSettingsScreen(),
+              ),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -43,6 +56,16 @@ class AppHubScreen extends StatelessWidget {
             cta: 'Abrir Inspector',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const OverlayInspectorScreen()),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _HubCard(
+            title: 'Chat Control',
+            description:
+                'IA controlando apps terceiros via comandos em português. Combina chat LLM com Inspector de acessibilidade.',
+            cta: 'Abrir Chat Control',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ChatControlScreen()),
             ),
           ),
           /*

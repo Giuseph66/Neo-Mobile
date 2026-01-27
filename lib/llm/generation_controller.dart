@@ -6,7 +6,6 @@ import '../ai/config/ai_config_store.dart';
 import '../ai/models/chat_message.dart';
 import '../ai/models/chat_reply.dart';
 import '../ai/models/chat_session.dart';
-import '../ai/providers/chat_provider.dart';
 import '../ai/providers/provider_registry.dart';
 import '../ai/storage/chat_store.dart';
 
@@ -58,6 +57,20 @@ class GenerationController extends StateNotifier<ChatState> {
   DateTime? _lastTpsUpdate;
   int _requestToken = 0;
 
+  /// Adiciona uma mensagem do usuário no chat **sem** enviar para o LLM.
+  /// Útil para fluxos como Chat Control (onde o plano pode ser exibido fora do chat normal).
+  void appendLocalUserMessage(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final userMessage = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      role: ChatRole.user,
+      text: trimmed,
+      createdAt: DateTime.now(),
+    );
+    state = state.copyWith(messages: [...state.messages, userMessage]);
+  }
+
   Future<void> initialize() async {
     await _config.load();
     _store = await ChatStore.open();
@@ -100,14 +113,28 @@ class GenerationController extends StateNotifier<ChatState> {
       state = state.copyWith(messages: nextSession.messages);
     }
 
-    final userMessage = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      role: ChatRole.user,
-      text: text.trim(),
-      createdAt: DateTime.now(),
-    );
+    final trimmed = text.trim();
+
+    // Se o chamador já inseriu a mensagem do usuário localmente (ex: Chat Control),
+    // evitamos duplicar a última mensagem.
+    final last = state.messages.isNotEmpty ? state.messages.last : null;
+    final shouldAppendUser = !(last != null &&
+        last.role == ChatRole.user &&
+        last.text.trim() == trimmed &&
+        DateTime.now().difference(last.createdAt).inSeconds <= 5);
+
+    final userIdBase = DateTime.now().millisecondsSinceEpoch.toString();
+    final userMessage = shouldAppendUser
+        ? ChatMessage(
+            id: userIdBase,
+            role: ChatRole.user,
+            text: trimmed,
+            createdAt: DateTime.now(),
+          )
+        : null;
+
     final assistantMessage = ChatMessage(
-      id: '${userMessage.id}_assistant',
+      id: '${userIdBase}_assistant',
       role: ChatRole.assistant,
       text: '',
       createdAt: DateTime.now(),
@@ -115,7 +142,11 @@ class GenerationController extends StateNotifier<ChatState> {
     );
 
     state = state.copyWith(
-      messages: [...state.messages, userMessage, assistantMessage],
+      messages: [
+        ...state.messages,
+        if (userMessage != null) userMessage,
+        assistantMessage,
+      ],
       isGenerating: true,
       activeProviderId: providerId.name,
       activeModelId: modelId,
@@ -130,12 +161,12 @@ class GenerationController extends StateNotifier<ChatState> {
     final session = _session ?? _fallbackSession(providerId.name, modelId);
 
     _streamSub?.cancel();
-    _currentUserText = text.trim();
+    _currentUserText = trimmed;
     _replyBuffer.clear();
 
     if (provider.providerId == 'local') {
       _streamSub = provider
-          .streamMessage(session, text.trim())
+          .streamMessage(session, trimmed)
           .listen(_handleChunk, onError: (error) {
         _finalize(error: error.toString());
       }, onDone: () async {
@@ -147,7 +178,7 @@ class GenerationController extends StateNotifier<ChatState> {
       });
     } else {
       try {
-        final reply = await provider.sendMessage(session, text.trim());
+        final reply = await provider.sendMessage(session, trimmed);
         if (requestToken != _requestToken) {
           return;
         }

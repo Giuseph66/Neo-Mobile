@@ -132,6 +132,32 @@ class AccessibilityPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                 service?.swipe(x1, y1, x2, y2, durationMs)
                 result.success(null)
             }
+            "navigateHome" -> {
+                val success = service?.navigateHome() ?: false
+                result.success(success)
+            }
+            "navigateBack" -> {
+                val success = service?.navigateBack() ?: false
+                result.success(success)
+            }
+            "navigateRecents" -> {
+                val success = service?.navigateRecents() ?: false
+                result.success(success)
+            }
+            "inputText" -> {
+                val text = call.argument<String>("text") ?: ""
+                val success = service?.inputText(text) ?: false
+                result.success(success)
+            }
+            "setWebSocketUrl" -> {
+                val url = call.argument<String>("url")
+                if (url != null) {
+                    service?.setWebSocketUrl(url)
+                    result.success(null)
+                } else {
+                    result.error("INVALID_ARG", "url is required", null)
+                }
+            }
             else -> result.notImplemented()
         }
     }
@@ -200,4 +226,3 @@ class AccessibilityPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
         }, 200)
     }
 }
-

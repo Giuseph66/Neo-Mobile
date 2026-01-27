@@ -154,6 +154,49 @@ class InspectorRepositoryImpl implements InspectorRepository {
   }
 
   @override
+  Future<bool> navigateHome() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('navigateHome');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> navigateBack() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('navigateBack');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> navigateRecents() async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>('navigateRecents');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> inputText(String text) async {
+    try {
+      final result = await _methodChannel.invokeMethod<bool>(
+        'inputText',
+        {'text': text},
+      );
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  @override
   Stream<UiSnapshot> get nodesStream {
     return _eventChannel
         .receiveBroadcastStream()
@@ -171,4 +214,3 @@ class InspectorRepositoryImpl implements InspectorRepository {
         });
   }
 }
-

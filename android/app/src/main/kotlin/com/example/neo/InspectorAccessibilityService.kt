@@ -2,6 +2,7 @@ package com.example.neo
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
@@ -37,16 +38,23 @@ class InspectorAccessibilityService : AccessibilityService() {
     private val loggedTexts = mutableMapOf<String, String>()
     private var lastLogTime = 0L
     private val LOG_THROTTLE_MS = 500L // Throttle de 500ms para logs
+    private var webSocketManager: WebSocketManager? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         windowManager = getSystemService(WINDOW_SERVICE) as? android.view.WindowManager
+        
+        // Initialize WebSocket
+        webSocketManager = WebSocketManager("ws://10.0.2.2:3000").apply {
+            connect()
+        }
     }
 
     override fun onDestroy() {
         instance = null
         removeOverlayView()
+        webSocketManager?.disconnect()
         super.onDestroy()
     }
 
@@ -63,6 +71,11 @@ class InspectorAccessibilityService : AccessibilityService() {
         try {
             val nodes = traverseTree(rootNode)
             currentNodes = nodes
+            
+            // Log elementos no terminal quando Inspector estiver ativo
+            if (isInspectorEnabled) {
+                logElementsToTerminal(nodes)
+            }
             
             // Se temos um node selecionado, verificar se ainda existe na nova árvore
             if (selectedNodeId != null) {
@@ -90,6 +103,11 @@ class InspectorAccessibilityService : AccessibilityService() {
             }
             
             updateOverlayNodes(nodes)
+            
+            // Send to WebSocket
+            val bounds = getScreenBounds()
+            webSocketManager?.sendNodes(nodes, bounds.width(), bounds.height())
+            
             // Enviar para Flutter via EventChannel será feito pelo AccessibilityPlugin
         } catch (e: Exception) {
             // Log error mas não crashar
@@ -323,12 +341,22 @@ class InspectorAccessibilityService : AccessibilityService() {
         overlayView?.invalidate()
     }
 
+    fun setWebSocketUrl(url: String) {
+        webSocketManager?.disconnect()
+        webSocketManager = WebSocketManager(url).apply {
+            connect()
+        }
+    }
+
     fun selectNode(nodeId: String) {
         selectedNodeId = nodeId
         // Armazenar o seletor do node selecionado para usar como fallback
         selectedNodeSelector = currentNodes.find { it.id == nodeId }?.selector
         overlayView?.setSelectedNode(nodeId)
         overlayView?.invalidate()
+        
+        // Notify WebSocket about selection
+        webSocketManager?.sendSelection(nodeId)
     }
 
     fun clickSelected(): Boolean {
@@ -495,6 +523,89 @@ class InspectorAccessibilityService : AccessibilityService() {
     }
 
     fun getCurrentNodes(): List<UiNode> = currentNodes
+
+    private fun logElementsToTerminal(nodes: List<UiNode>) {
+        // Throttle: log apenas a cada 2 segundos para não sobrecarregar
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastLogTime < 2000) {
+            return
+        }
+        lastLogTime = currentTime
+
+        // Log formatado para fácil cópia e cola no chat
+        android.util.Log.d("InspectorElements", "\n" + "=".repeat(60))
+        android.util.Log.d("InspectorElements", "ELEMENTOS ENCONTRADOS - Total: ${nodes.size}")
+        android.util.Log.d("InspectorElements", "=".repeat(60))
+        
+        nodes.forEachIndexed { index, node ->
+            val text = node.text?.takeIf { it.isNotBlank() } ?: "(sem texto)"
+            val className = node.className
+            val capabilities = mutableListOf<String>()
+            if (node.clickable) capabilities.add("clicável")
+            if (node.scrollable) capabilities.add("scrollável")
+            if (node.enabled) capabilities.add("habilitado")
+            
+            val capsStr = if (capabilities.isNotEmpty()) " [${capabilities.joinToString(", ")}]" else ""
+            
+            android.util.Log.d("InspectorElements", "$index. \"$text\" - $className$capsStr")
+        }
+        
+        android.util.Log.d("InspectorElements", "=".repeat(60) + "\n")
+    }
+
+    fun navigateHome(): Boolean {
+        return try {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun navigateBack(): Boolean {
+        return try {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun navigateRecents(): Boolean {
+        return try {
+            performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun inputText(text: String): Boolean {
+        val nodeId = selectedNodeId
+        var node: AccessibilityNodeInfo? = null
+
+        if (nodeId != null) {
+            node = findNodeById(nodeId)
+        }
+
+        if (node == null && selectedNodeSelector != null) {
+            node = findNodeBySelector(selectedNodeSelector!!)
+        }
+
+        if (node == null) {
+            return false
+        }
+
+        return try {
+            val args = Bundle()
+            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            val result = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            node.recycle()
+            result
+        } catch (e: Exception) {
+            try {
+                node.recycle()
+            } catch (ignored: Exception) {}
+            false
+        }
+    }
 
     private fun findNodeById(nodeId: String): AccessibilityNodeInfo? {
         val root = rootInActiveWindow ?: return null
@@ -1031,4 +1142,3 @@ class InspectorAccessibilityService : AccessibilityService() {
         overlayView?.invalidate()
     }
 }
-
