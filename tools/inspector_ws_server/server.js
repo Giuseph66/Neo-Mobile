@@ -40,6 +40,8 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 let lastSnapshot = null;
+let logs = [];
+let executionStatus = { status: 'idle', currentStep: -1, routineName: '' };
 
 function broadcast(payload) {
   const data = JSON.stringify(payload);
@@ -55,6 +57,10 @@ wss.on('connection', (socket) => {
     socket.send(JSON.stringify(lastSnapshot));
   }
 
+  // Enviar estado atual ao conectar
+  socket.send(JSON.stringify({ type: 'logs_history', logs }));
+  socket.send(JSON.stringify({ type: 'execution_status', ...executionStatus }));
+
   socket.on('message', (raw) => {
     let message;
     try {
@@ -69,6 +75,28 @@ wss.on('connection', (socket) => {
 
     if (message.type === 'snapshot') {
       lastSnapshot = message;
+      broadcast(message);
+      return;
+    }
+
+    if (message.type === 'log') {
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        message: message.message,
+        level: message.level || 'info'
+      };
+      logs.push(logEntry);
+      if (logs.length > 200) logs.shift(); // Manter últimos 200 logs
+      broadcast({ type: 'log', ...logEntry });
+      return;
+    }
+
+    if (message.type === 'execution_status') {
+      executionStatus = {
+        status: message.status,
+        currentStep: message.currentStep,
+        routineName: message.routineName
+      };
       broadcast(message);
       return;
     }

@@ -16,6 +16,10 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
+import android.app.AlarmManager
+import android.app.PendingIntent
+import java.util.Calendar
+import android.util.Log
 
 class AccessibilityPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
     private lateinit var methodChannel: MethodChannel
@@ -158,6 +162,62 @@ class AccessibilityPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                     result.error("INVALID_ARG", "url is required", null)
                 }
             }
+            "sendLog" -> {
+                val msg = call.argument<String>("message") ?: ""
+                val level = call.argument<String>("level") ?: "info"
+                service?.sendLog(msg, level)
+                result.success(null)
+            }
+            "sendExecutionStatus" -> {
+                val status = call.argument<String>("status") ?: "idle"
+                val routine = call.argument<String>("routineName") ?: ""
+                val step = call.argument<Int>("currentStep") ?: -1
+                service?.sendExecutionStatus(status, routine, step)
+                result.success(null)
+            }
+            "getInstalledApps" -> {
+                val apps = getInstalledApps()
+                result.success(apps)
+            }
+            "getInitialAction" -> {
+                val intent = activity?.intent
+                if (intent?.getStringExtra("source") == "automation_trigger") {
+                    result.success("run_routine")
+                } else {
+                    result.success(null)
+                }
+            }
+            "getInitialRoutineId" -> {
+                val intent = activity?.intent
+                val id = intent?.getIntExtra("routineId", -1)
+                if (id != null && id != -1) {
+                    result.success(id)
+                } else {
+                    result.success(null)
+                }
+            }
+            "scheduleRoutine" -> {
+                val routineId = call.argument<Int>("routineId") ?: -1
+                val routineName = call.argument<String>("routineName") ?: "Routine"
+                val hour = call.argument<Int>("hour") ?: 0
+                val minute = call.argument<Int>("minute") ?: 0
+                
+                if (routineId != -1) {
+                    scheduleRoutine(routineId, routineName, hour, minute)
+                    result.success(true)
+                } else {
+                    result.error("INVALID_ARG", "routineId is required", null)
+                }
+            }
+            "cancelRoutine" -> {
+                val routineId = call.argument<Int>("routineId") ?: -1
+                if (routineId != -1) {
+                    cancelRoutine(routineId)
+                    result.success(true)
+                } else {
+                    result.error("INVALID_ARG", "routineId is required", null)
+                }
+            }
             else -> result.notImplemented()
         }
     }
@@ -224,5 +284,86 @@ class AccessibilityPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Acti
                 handler.postDelayed(this, 200) // Throttle de 200ms
             }
         }, 200)
+    }
+
+    private fun getInstalledApps(): List<Map<String, String>> {
+        val context = context ?: return emptyList()
+        val pm = context.packageManager
+        val apps = pm.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
+        val result = mutableListOf<Map<String, String>>()
+        
+        for (app in apps) {
+            // Only include non-system apps or important ones? 
+            // For now, let's include all that have a launcher intent
+            if (pm.getLaunchIntentForPackage(app.packageName) != null) {
+                val label = app.loadLabel(pm).toString()
+                result.add(mapOf(
+                    "name" to label,
+                    "package" to app.packageName
+                ))
+            }
+        }
+        return result.sortedBy { it["name"]?.lowercase() }
+    }
+
+    private fun scheduleRoutine(routineId: Int, routineName: String, hour: Int, minute: Int) {
+        val context = context ?: return
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        
+        val intent = Intent(context, AutomationReceiver::class.java).apply {
+            putExtra("routineId", routineId)
+            putExtra("routineName", routineName)
+            action = "com.example.neo.ACTION_RUN_ROUTINE"
+        }
+        
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            routineId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = System.currentTimeMillis()
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            
+            // Se o horário já passou hoje, agendar para amanhã
+            if (timeInMillis <= System.currentTimeMillis()) {
+                add(Calendar.DAY_OF_YEAR, 1)
+            }
+        }
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+        } else {
+            alarmManager.setExact(
+                AlarmManager.RTC_WAKEUP,
+                calendar.timeInMillis,
+                pendingIntent
+            )
+        }
+        
+        Log.d("AccessibilityPlugin", "Routine $routineId scheduled for ${calendar.time}")
+    }
+
+    private fun cancelRoutine(routineId: Int) {
+        val context = context ?: return
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        
+        val intent = Intent(context, AutomationReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            routineId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        alarmManager.cancel(pendingIntent)
     }
 }

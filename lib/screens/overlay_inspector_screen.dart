@@ -329,11 +329,14 @@ class _OverlayInspectorScreenState extends State<OverlayInspectorScreen>
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Streaming (WebSocket)',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    const Expanded(
+                      child: Text(
+                        'Streaming (WebSocket)',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(

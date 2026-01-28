@@ -10,11 +10,13 @@ class NeonCard extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.selected = false,
+    this.onTap,
   });
 
   final Widget child;
   final EdgeInsets padding;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -35,14 +37,20 @@ class NeonCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: AppColors.surface1.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.outline0),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                padding: padding,
+                decoration: BoxDecoration(
+                  color: AppColors.surface1.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.outline0),
+                ),
+                child: child,
+              ),
             ),
-            child: child,
           ),
         ),
       ),

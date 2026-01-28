@@ -46,7 +46,7 @@ class InspectorAccessibilityService : AccessibilityService() {
         windowManager = getSystemService(WINDOW_SERVICE) as? android.view.WindowManager
         
         // Initialize WebSocket
-        webSocketManager = WebSocketManager("ws://10.0.2.2:3000").apply {
+        webSocketManager = WebSocketManager("ws://10.0.2.2:7071").apply {
             connect()
         }
     }
@@ -126,12 +126,12 @@ class InspectorAccessibilityService : AccessibilityService() {
         
         traverseNode(root, nodes, screenBounds, 0)
         
-        // Priorizar: clickable > scrollable > focusable
-        val sorted = nodes.sortedWith(compareBy(
-            { !it.clickable },
-            { !it.scrollable },
-            { !it.enabled }
-        ))
+        // Priorizar: nodes que possuem texto > clicáveis > resto
+        val sorted = nodes.sortedWith(compareByDescending<UiNode> { 
+            !it.text.isNullOrBlank() 
+        }.thenByDescending { 
+            it.clickable 
+        })
         
         return sorted.take(MAX_NODES)
     }
@@ -346,6 +346,14 @@ class InspectorAccessibilityService : AccessibilityService() {
         webSocketManager = WebSocketManager(url).apply {
             connect()
         }
+    }
+
+    fun sendLog(message: String, level: String = "info") {
+        webSocketManager?.sendLog(message, level)
+    }
+
+    fun sendExecutionStatus(status: String, routineName: String = "", currentStep: Int = -1) {
+        webSocketManager?.sendExecutionStatus(status, routineName, currentStep)
     }
 
     fun selectNode(nodeId: String) {

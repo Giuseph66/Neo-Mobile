@@ -1,86 +1,141 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Inspector Boxes Viewer</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <header>
-      <div>
-        <h1>Inspector Boxes</h1>
-        <p>Visualize os boxes enviados pelo app Flutter em tempo real.</p>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inspector Boxes Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&family=Space+Grotesk:wght@400;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Inspector Boxes</h1>
+      <p>Visualize os boxes enviados pelo app Flutter em tempo real.</p>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="home">Home</button>
+      <button class="tab-btn" data-tab="logs">Logs</button>
+      <button class="tab-btn" data-tab="execution">Execução</button>
+    </nav>
+    <div class="status" id="status">Desconectado</div>
+  </header>
+
+  <main>
+    <div id="tab-home" class="tab-content active">
+      <div class="panels-grid">
+        <section class="panel canvas-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Canvas</h2>
+              <p id="screenInfo">Aguardando snapshot...</p>
+            </div>
+            <div class="panel-actions">
+              <button id="fitBtn">Ajustar</button>
+              <button id="clearBtn">Limpar</button>
+            </div>
+          </div>
+          <div class="canvas-wrap">
+            <canvas id="canvas"></canvas>
+          </div>
+        </section>
+
+        <section class="panel control-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Controles</h2>
+              <p>Atalhos e joystick</p>
+            </div>
+          </div>
+          <div class="keyboard-panel" id="keyboardPanel">
+            <div class="keyboard-header">
+              <span>Enviar texto</span>
+              <span class="kbd-hint">selecionar um input antes</span>
+            </div>
+            <div class="keyboard-row">
+              <input id="keyboardInput" type="text" placeholder="Digite aqui..." />
+              <button id="keyboardSend">Enviar</button>
+            </div>
+          </div>
+          <div class="nav-row">
+            <button class="nav-btn" data-action="navigateRecents">Recentes</button>
+            <button class="nav-btn" data-action="navigateHome">Home</button>
+            <button class="nav-btn" data-action="navigateBack">Voltar</button>
+          </div>
+          <div class="dpad">
+            <button class="dpad-btn up" data-dir="up">▲</button>
+            <button class="dpad-btn left" data-dir="left">◀</button>
+            <button class="dpad-btn center" data-action="centerTap">Teclado</button>
+            <button class="dpad-btn right" data-dir="right">▶</button>
+            <button class="dpad-btn down" data-dir="down">▼</button>
+          </div>
+          <div class="hint">
+            Use o joystick para enviar swipes curtos.
+          </div>
+        </section>
+
+        <section class="panel details-panel">
+          <div class="panel-header">
+            <div>
+              <h2>Detalhes</h2>
+              <p id="metaInfo">Sem dados ainda.</p>
+            </div>
+          </div>
+          <div class="search-row">
+            <input id="nodeSearch" type="text" placeholder="Buscar por label, classe, id..." />
+            <span id="searchCount"></span>
+          </div>
+          <div id="nodeList" class="node-list"></div>
+        </section>
+      </div> <!-- end panels-grid -->
+    </div> <!-- end tab-home -->
+
+    <div id="tab-logs" class="tab-content">
+      <div class="panel logs-panel">
+        <div class="panel-header">
+          <div>
+            <h2>Logs do Sistema</h2>
+            <p>Depuração e eventos em tempo real</p>
+          </div>
+          <button id="clearLogsBtn">Limpar Logs</button>
+        </div>
+        <div id="logList" class="log-list">
+          <div class="log-empty">Nenhum log recebido ainda.</div>
+        </div>
       </div>
-      <div class="status" id="status">Desconectado</div>
-    </header>
+    </div>
 
-    <main>
-      <section class="panel canvas-panel">
+    <div id="tab-execution" class="tab-content">
+      <div class="panel execution-panel">
         <div class="panel-header">
           <div>
-            <h2>Canvas</h2>
-            <p id="screenInfo">Aguardando snapshot...</p>
+            <h2>Status da Execução</h2>
+            <p id="executionRoutine">Nenhuma rotina ativa</p>
           </div>
-          <div class="panel-actions">
-            <button id="fitBtn">Ajustar</button>
-            <button id="clearBtn">Limpar</button>
+          <div id="executionBadge" class="badge idle">IDLE</div>
+        </div>
+        <div class="execution-info">
+          <div class="step-progress-row">
+            <div class="progress-track">
+              <div id="stepProgressBar" class="progress-fill"></div>
+            </div>
+            <span id="stepProgressText">Passo 0 de 0</span>
+          </div>
+          <div id="executionLogs" class="execution-log-list">
+            <p class="hint">Inicie uma rotina no app para acompanhar aqui.</p>
           </div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="canvas"></canvas>
-        </div>
-      </section>
+      </div>
+    </div>
+  </main>
 
-      <section class="panel control-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Controles</h2>
-            <p>Atalhos e joystick</p>
-          </div>
-        </div>
-        <div class="keyboard-panel" id="keyboardPanel">
-          <div class="keyboard-header">
-            <span>Enviar texto</span>
-            <span class="kbd-hint">selecionar um input antes</span>
-          </div>
-          <div class="keyboard-row">
-            <input id="keyboardInput" type="text" placeholder="Digite aqui..." />
-            <button id="keyboardSend">Enviar</button>
-          </div>
-        </div>
-        <div class="nav-row">
-          <button class="nav-btn" data-action="navigateRecents">Recentes</button>
-          <button class="nav-btn" data-action="navigateHome">Home</button>
-          <button class="nav-btn" data-action="navigateBack">Voltar</button>
-        </div>
-        <div class="dpad">
-          <button class="dpad-btn up" data-dir="up">▲</button>
-          <button class="dpad-btn left" data-dir="left">◀</button>
-          <button class="dpad-btn center" data-action="centerTap">Teclado</button>
-          <button class="dpad-btn right" data-dir="right">▶</button>
-          <button class="dpad-btn down" data-dir="down">▼</button>
-        </div>
-        <div class="hint">
-          Use o joystick para enviar swipes curtos.
-        </div>
-      </section>
+  <script src="/app.js"></script>
+</body>
 
-      <section class="panel details-panel">
-        <div class="panel-header">
-          <div>
-            <h2>Detalhes</h2>
-            <p id="metaInfo">Sem dados ainda.</p>
-          </div>
-        </div>
-        <div class="search-row">
-          <input id="nodeSearch" type="text" placeholder="Buscar por label, classe, id..." />
-          <span id="searchCount"></span>
-        </div>
-        <div id="nodeList" class="node-list"></div>
-      </section>
-    </main>
-
-    <script src="/app.js"></script>
-  </body>
 </html>

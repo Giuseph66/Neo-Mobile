@@ -16,6 +16,7 @@ const keyboardSend = document.getElementById('keyboardSend');
 let lastSnapshot = null;
 let lastFilteredNodes = [];
 let keyboardVisible = false;
+let logs = [];
 
 const COLORS = {
   any: '#60a5fa',
@@ -182,16 +183,92 @@ socket.addEventListener('message', (event) => {
     return;
   }
 
-  if (!payload || payload.type !== 'snapshot') {
+  if (!payload || !payload.type) return;
+
+  switch (payload.type) {
+    case 'snapshot':
+      lastSnapshot = payload;
+      drawSnapshot(payload);
+      updateList(payload);
+      updateMeta(payload);
+      fitCanvas();
+      showKeyboardIfInputSelected();
+      break;
+
+    case 'log':
+      appendLog(payload);
+      break;
+
+    case 'logs_history':
+      logs = payload.logs;
+      renderLogs();
+      break;
+
+    case 'execution_status':
+      updateExecutionStatus(payload);
+      break;
+  }
+});
+
+function appendLog(log) {
+  logs.push(log);
+  if (logs.length > 200) logs.shift();
+  renderLogs();
+}
+
+function renderLogs() {
+  const list = document.getElementById('logList');
+  if (!list) return;
+
+  if (logs.length === 0) {
+    list.innerHTML = '<div class="log-empty">Nenhum log recebido ainda.</div>';
     return;
   }
 
-  lastSnapshot = payload;
-  drawSnapshot(payload);
-  updateList(payload);
-  updateMeta(payload);
-  fitCanvas();
-  showKeyboardIfInputSelected();
+  list.innerHTML = logs.map(l => `
+    <div class="log-entry ${l.level}">
+      <span class="time">${new Date(l.timestamp).toLocaleTimeString()}</span>
+      <span class="msg">${l.message}</span>
+    </div>
+  `).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+function updateExecutionStatus(data) {
+  const routineEl = document.getElementById('executionRoutine');
+  const badgeEl = document.getElementById('executionBadge');
+  const progressText = document.getElementById('stepProgressText');
+  const progressBar = document.getElementById('stepProgressBar');
+  const execLogs = document.getElementById('executionLogs');
+
+  if (routineEl) routineEl.textContent = data.routineName || 'Nenhuma rotina ativa';
+
+  if (badgeEl) {
+    badgeEl.className = `badge ${data.status}`;
+    badgeEl.textContent = data.status.toUpperCase();
+  }
+
+  if (progressText) progressText.textContent = `Em andamento...`;
+  if (progressBar) progressBar.style.width = '0%'; // Simples reset
+}
+
+// Tab Logic
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tabId = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+    btn.classList.add('active');
+    document.getElementById(`tab-${tabId}`).classList.add('active');
+
+    if (tabId === 'home') fitCanvas();
+  });
+});
+
+document.getElementById('clearLogsBtn')?.addEventListener('click', () => {
+  logs = [];
+  renderLogs();
 });
 
 function sendCommand(command) {

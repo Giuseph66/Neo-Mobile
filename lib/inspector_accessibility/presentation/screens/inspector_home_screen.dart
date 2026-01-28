@@ -15,6 +15,8 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
   late final AccessibilityInspectorController _controller;
   bool _checkingPermissions = false;
   final TextEditingController _wsController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  String _nodeSearchQuery = '';
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _wsController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -166,6 +169,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
               bottom: 16,
               right: 16,
               child: FloatingActionButton(
+                heroTag: 'stop_inspector_fab',
                 onPressed: _stopInspector,
                 backgroundColor: Colors.red,
                 child: const Icon(Icons.stop, color: Colors.white),
@@ -219,6 +223,8 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
                   icon: Icon(_controller.aimMode ? Icons.cancel : Icons.center_focus_strong),
                   label: Text(_controller.aimMode ? 'Desativar Mira' : 'Ativar Mira'),
                 ),
+                const SizedBox(width: 8),
+                _buildGlobalNavButtons(),
               ],
             ),
           const SizedBox(height: 16),
@@ -286,8 +292,14 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
                 _controller.setStreamingEnabled(value);
               },
             ),
-            const Text('Enviar boxes para o servidor'),
-            const Spacer(),
+            const Expanded(
+              child: Text(
+                'Enviar boxes para o servidor',
+                style: TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
             OutlinedButton(
               onPressed: () {
                 _controller.setStreamUrl(_wsController.text.trim());
@@ -341,20 +353,38 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
       );
     }
 
-    // Layout: Lista à esquerda, controles à direita
-    return Row(
+    final filteredNodes = snapshot.nodes.where((n) {
+      if (_nodeSearchQuery.isEmpty) return true;
+      final label = (n.text ?? n.viewIdResourceName ?? n.className).toLowerCase();
+      return label.contains(_nodeSearchQuery.toLowerCase());
+    }).toList();
+
+    return Column(
       children: [
-        // Lista de elementos (70% da largura)
-        Expanded(
-          flex: 7,
-          child: _buildNodesList(snapshot.nodes),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (val) => setState(() => _nodeSearchQuery = val),
+            decoration: InputDecoration(
+              hintText: 'Filtrar por texto ou ID...',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              suffixIcon: _nodeSearchQuery.isNotEmpty 
+                ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setState(() {
+                  _searchController.clear();
+                  _nodeSearchQuery = '';
+                }))
+                : null,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+            ),
+          ),
         ),
-        const VerticalDivider(width: 1),
-        // Painel de controles (30% da largura)
         Expanded(
-          flex: 3,
-          child: _buildActionPanel(),
+          child: _buildNodesList(filteredNodes),
         ),
+        if (_controller.selectedNode != null)
+          _buildActionPanel(),
       ],
     );
   }
@@ -425,102 +455,129 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
 
   Widget _buildActionPanel() {
     final selectedNode = _controller.selectedNode;
-    
-    if (selectedNode == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'Selecione um elemento para ver as ações disponíveis',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
+    if (selectedNode == null) return const SizedBox.shrink();
 
     return Container(
-      color: const Color(0xFF1A1A1A),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E26),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, -2))
+        ],
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Cabeçalho com informações do elemento
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.2),
-              border: Border(
-                bottom: BorderSide(color: Colors.green.withOpacity(0.3)),
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.green.withOpacity(0.1),
+                child: const Icon(Icons.ads_click, color: Colors.green, size: 20),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  selectedNode.className,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      selectedNode.text ?? selectedNode.className.split('.').last,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      selectedNode.viewIdResourceName ?? 'Sem ID',
+                      style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => _controller.selectNode(null),
+                icon: const Icon(Icons.close, size: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (selectedNode.clickable)
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.play_arrow,
+                    label: 'CLICAR',
                     color: Colors.green,
+                    onPressed: () => _executeAction('click'),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Pos: (${selectedNode.bounds.left}, ${selectedNode.bounds.top})',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[400],
+              if (selectedNode.scrollable) ...[
+                if (selectedNode.clickable) const SizedBox(width: 12),
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.unfold_more,
+                    label: 'SCROLL',
+                    color: Colors.blue,
+                    onPressed: () => _showScrollOptions(context),
+                  ),
+                ),
+              ],
+              if (!selectedNode.clickable && !selectedNode.scrollable)
+                const Expanded(
+                  child: Text(
+                    'Elemento informativo - sem ações diretas',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showScrollOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E26),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Direção do Scroll', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.arrow_upward,
+                    label: 'Para Cima',
+                    color: Colors.blue,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _executeAction('scrollBackward');
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildActionButton(
+                    icon: Icons.arrow_downward,
+                    label: 'Para Baixo',
+                    color: Colors.blue,
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _executeAction('scrollForward');
+                    },
                   ),
                 ),
               ],
             ),
-          ),
-          // Botões de ação
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Scroll para cima
-                  if (selectedNode.scrollable)
-                    _buildActionButton(
-                      icon: Icons.arrow_upward,
-                      label: 'Scroll para Cima',
-                      color: Colors.blue,
-                      onPressed: () => _executeAction('scrollBackward'),
-                    ),
-                  const SizedBox(height: 12),
-                  // Clique (Play)
-                  if (selectedNode.clickable)
-                    _buildActionButton(
-                      icon: Icons.play_arrow,
-                      label: 'Clicar',
-                      color: Colors.green,
-                      onPressed: () => _executeAction('click'),
-                    ),
-                  const SizedBox(height: 12),
-                  // Scroll para baixo
-                  if (selectedNode.scrollable)
-                    _buildActionButton(
-                      icon: Icons.arrow_downward,
-                      label: 'Scroll para Baixo',
-                      color: Colors.blue,
-                      onPressed: () => _executeAction('scrollForward'),
-                    ),
-                  if (!selectedNode.clickable && !selectedNode.scrollable) ...[
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Este elemento não suporta ações',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -643,6 +700,32 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> with WidgetsB
           ],
         );
       },
+    );
+  }
+
+  Widget _buildGlobalNavButtons() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildNavIcon(Icons.arrow_back, 'Voltar', _controller.navigateBack),
+        const SizedBox(width: 4),
+        _buildNavIcon(Icons.circle_outlined, 'Home', _controller.navigateHome),
+        const SizedBox(width: 4),
+        _buildNavIcon(Icons.menu, 'Recentes', _controller.navigateRecents),
+      ],
+    );
+  }
+
+  Widget _buildNavIcon(IconData icon, String tooltip, VoidCallback onPressed) {
+    return IconButton(
+      icon: Icon(icon, size: 20, color: Colors.white70),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withOpacity(0.1),
+        padding: const EdgeInsets.all(8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 }

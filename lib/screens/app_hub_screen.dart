@@ -6,9 +6,69 @@ import '../chat_control/screens/chat_control_screen.dart';
 import 'settings/app_settings_screen.dart';
 import 'home_chat_screen.dart';
 import 'overlay_inspector_screen.dart';
+import '../automation/screens/scheduled_automation_root.dart';
 
-class AppHubScreen extends StatelessWidget {
+import 'package:flutter/services.dart';
+import '../automation/services/automation_runner.dart';
+import '../inspector_accessibility/presentation/accessibility_inspector_controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../automation/screens/runs_history_screen.dart';
+import '../automation/database/automation_database.dart';
+
+class AppHubScreen extends ConsumerStatefulWidget {
   const AppHubScreen({super.key});
+
+  @override
+  ConsumerState<AppHubScreen> createState() => _AppHubScreenState();
+}
+
+class _AppHubScreenState extends ConsumerState<AppHubScreen> {
+  static const _platform = MethodChannel('inspector/actions');
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLaunchIntent();
+  }
+
+  Future<void> _checkLaunchIntent() async {
+    try {
+      final String? initialAction = await _platform.invokeMethod('getInitialAction');
+      if (initialAction == 'run_routine') {
+        final int? routineId = await _platform.invokeMethod('getInitialRoutineId');
+        if (routineId != null && mounted) {
+          _startAutomaion(routineId);
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao verificar intent de lançamento: $e');
+    }
+  }
+
+  Future<void> _startAutomaion(int routineId) async {
+    // 1. Navegar para a tela de automação (opcional, para feedback visual)
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ScheduledAutomationRoot()),
+    );
+
+    // 2. Buscar rotina e execução
+    try {
+      final routines = await AutomationDatabase.instance.getAllRoutines();
+      final routine = routines.firstWhere((r) => r.id == routineId);
+      final steps = await AutomationDatabase.instance.getStepsForRoutine(routineId);
+
+      // 3. Iniciar Runner
+      final controller = ref.read(accessibilityInspectorControllerProvider);
+      final runner = AutomationRunner(controller);
+      
+      // Delay pequeno para garantir que UI carregou
+      await Future.delayed(const Duration(seconds: 1));
+      
+      runner.runRoutine(routine, steps);
+    } catch (e) {
+      debugPrint('Erro ao iniciar automação via intent: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,16 +128,16 @@ class AppHubScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const ChatControlScreen()),
             ),
           ),
-          /*
           const SizedBox(height: 12),
           _HubCard(
-            title: 'Inspector Accessibility',
+            title: 'Automação Agendada',
             description:
-                'Fluxo de permissoes e ferramentas do inspector de acessibilidade.',
-            cta: 'Abrir Fluxo',
-            onTap: () => Navigator.of(context).pushNamed('/permissions'),
+                'Crie rotinas e agendamentos para automatizar tarefas em outros aplicativos.',
+            cta: 'Abrir Automações',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ScheduledAutomationRoot()),
+            ),
           ),
-           */
         ],
       ),
     );

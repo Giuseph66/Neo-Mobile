@@ -80,6 +80,35 @@ class WebSocketManager(private val serverUrl: String) {
         }
     }
 
+    fun sendLog(message: String, level: String = "info") {
+        if (!isConnected) return
+        try {
+            val json = JSONObject().apply {
+                put("type", "log")
+                put("message", message)
+                put("level", level)
+            }
+            webSocket?.send(json.toString())
+        } catch (e: Exception) {
+            Log.e("WebSocketManager", "Error sending log: ${e.message}")
+        }
+    }
+
+    fun sendExecutionStatus(status: String, routineName: String = "", currentStep: Int = -1) {
+        if (!isConnected) return
+        try {
+            val json = JSONObject().apply {
+                put("type", "execution_status")
+                put("status", status)
+                put("routineName", routineName)
+                put("currentStep", currentStep)
+            }
+            webSocket?.send(json.toString())
+        } catch (e: Exception) {
+            Log.e("WebSocketManager", "Error sending execution status: ${e.message}")
+        }
+    }
+
     fun disconnect() {
         webSocket?.close(1000, "Goodbye")
         isConnected = false

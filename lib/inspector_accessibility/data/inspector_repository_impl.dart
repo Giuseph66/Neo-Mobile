@@ -197,6 +197,45 @@ class InspectorRepositoryImpl implements InspectorRepository {
   }
 
   @override
+  Future<void> sendLog(String message, {String level = 'info'}) async {
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'sendLog',
+        {'message': message, 'level': level},
+      );
+    } catch (e) {
+      // Ignorar
+    }
+  }
+
+  @override
+  Future<void> sendExecutionStatus(String status, {String routineName = '', int currentStep = -1}) async {
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'sendExecutionStatus',
+        {
+          'status': status,
+          'routineName': routineName,
+          'currentStep': currentStep,
+        },
+      );
+    } catch (e) {
+      // Ignorar
+    }
+  }
+
+  @override
+  Future<List<Map<String, String>>> getInstalledApps() async {
+    try {
+      final result = await _methodChannel.invokeListMethod<Map<dynamic, dynamic>>('getInstalledApps');
+      if (result == null) return [];
+      return result.map((e) => e.cast<String, String>()).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
   Stream<UiSnapshot> get nodesStream {
     return _eventChannel
         .receiveBroadcastStream()

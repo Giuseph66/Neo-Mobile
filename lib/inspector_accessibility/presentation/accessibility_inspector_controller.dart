@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../inspector/inspector_websocket_client.dart';
 import '../data/inspector_repository.dart';
@@ -7,6 +8,10 @@ import '../data/inspector_repository_impl.dart';
 import '../domain/models/ui_node.dart';
 import '../domain/models/ui_snapshot.dart';
 import '../../../chat_control/services/element_storage_service.dart';
+
+final accessibilityInspectorControllerProvider = ChangeNotifierProvider<AccessibilityInspectorController>((ref) {
+  return AccessibilityInspectorController();
+});
 
 class AccessibilityInspectorController extends ChangeNotifier {
   final InspectorRepository _repository = InspectorRepositoryImpl();
@@ -66,6 +71,10 @@ class AccessibilityInspectorController extends ChangeNotifier {
     return await _repository.isAccessibilityEnabled();
   }
 
+  Future<List<Map<String, String>>> getInstalledApps() async {
+    return await _repository.getInstalledApps();
+  }
+
   Future<void> start() async {
     if (_enabled) return;
 
@@ -98,6 +107,8 @@ class AccessibilityInspectorController extends ChangeNotifier {
     _selectedNode = null;
     _aimMode = false;
     _aimPosition = null;
+    _webSocketClient.onStatusChanged = null;
+    _webSocketClient.onMessage = null;
     unawaited(_webSocketClient.disconnect());
     notifyListeners();
   }
@@ -264,8 +275,12 @@ class AccessibilityInspectorController extends ChangeNotifier {
 
     if (action == 'inputText') {
       final text = message['text'] as String? ?? '';
-      unawaited(_repository.inputText(text));
+      unawaited(inputText(text));
     }
+  }
+
+  Future<bool> inputText(String text) async {
+    return await _repository.inputText(text);
   }
 
   void setAimMode(bool enabled) {
@@ -307,9 +322,46 @@ class AccessibilityInspectorController extends ChangeNotifier {
     await _repository.swipe(x1, y1, x2, y2, durationMs: durationMs);
   }
 
+  Future<void> navigateHome() async {
+    await _repository.navigateHome();
+  }
+
+  Future<void> navigateBack() async {
+    await _repository.navigateBack();
+  }
+
+  Future<void> navigateRecents() async {
+    await _repository.navigateRecents();
+  }
+
+  Future<void> sendLog(String message, {String level = 'info'}) async {
+    final payload = {
+      'type': 'log',
+      'timestamp': DateTime.now().toIso8601String(),
+      'message': message,
+      'level': level,
+    };
+    _webSocketClient.sendJson(payload);
+    // Também opcionalmente enviar para Kotlin se quisermos logs do sistema lá
+    await _repository.sendLog(message, level: level);
+  }
+
+  Future<void> sendExecutionStatus(String status, {String routineName = '', int currentStep = -1}) async {
+    final payload = {
+      'type': 'execution_status',
+      'status': status,
+      'routineName': routineName,
+      'currentStep': currentStep,
+    };
+    _webSocketClient.sendJson(payload);
+    await _repository.sendExecutionStatus(status, routineName: routineName, currentStep: currentStep);
+  }
+
   @override
   void dispose() {
     _nodesSubscription?.cancel();
+    _webSocketClient.onStatusChanged = null;
+    _webSocketClient.onMessage = null;
     unawaited(_webSocketClient.disconnect());
     super.dispose();
   }
