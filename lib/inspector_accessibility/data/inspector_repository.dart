@@ -18,6 +18,7 @@ abstract class InspectorRepository {
   Future<bool> navigateBack();
   Future<bool> navigateRecents();
   Future<bool> inputText(String text);
+  Future<void> setWebSocketUrl(String url);
   Future<void> sendLog(String message, {String level = 'info'});
   Future<void> sendExecutionStatus(String status, {String routineName = '', int currentStep = -1});
   Future<List<Map<String, String>>> getInstalledApps();

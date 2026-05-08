@@ -27,7 +27,7 @@ class AccessibilityInspectorController extends ChangeNotifier {
   UiSnapshot? _lastSnapshot;
   StreamSubscription<UiSnapshot>? _nodesSubscription;
   bool _streamingEnabled = false;
-  String _streamUrl = 'ws://192.168.0.25:7071';
+  String _streamUrl = 'ws://127.0.0.1:7071';
 
   bool get enabled => _enabled;
   bool get overlayVisible => _overlayVisible;
@@ -86,6 +86,7 @@ class AccessibilityInspectorController extends ChangeNotifier {
 
     try {
       await _repository.setInspectorEnabled(true);
+      await _repository.setWebSocketUrl(_streamUrl);
       _enabled = true;
       if (_streamingEnabled) {
         unawaited(_webSocketClient.ensureConnected(_streamUrl));
@@ -143,6 +144,9 @@ class AccessibilityInspectorController extends ChangeNotifier {
   void setStreamingEnabled(bool value) {
     if (_streamingEnabled == value) return;
     _streamingEnabled = value;
+    if (_streamingEnabled) {
+      unawaited(_repository.setWebSocketUrl(_streamUrl));
+    }
     if (_streamingEnabled && _enabled) {
       unawaited(_webSocketClient.ensureConnected(_streamUrl));
     } else {
@@ -154,6 +158,7 @@ class AccessibilityInspectorController extends ChangeNotifier {
   void setStreamUrl(String url) {
     if (url.isEmpty || url == _streamUrl) return;
     _streamUrl = url;
+    unawaited(_repository.setWebSocketUrl(_streamUrl));
     if (_streamingEnabled && _enabled) {
       unawaited(_webSocketClient.ensureConnected(_streamUrl));
     }

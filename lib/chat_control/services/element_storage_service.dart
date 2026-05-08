@@ -8,11 +8,17 @@ class ElementStorageService {
   final ElementDatabase _database = ElementDatabase.instance;
   ElementGroup? _currentGroup;
   DateTime? _lastGroupUpdate;
+  String? _lastSnapshotSignature; // Trava para evitar salvar o mesmo dado 
   static const Duration groupTimeout = Duration(seconds: 5);
 
   /// Salva elementos de um snapshot, agrupando por demanda/tela
   Future<void> saveSnapshot(UiSnapshot snapshot) async {
     if (snapshot.nodes.isEmpty) return;
+
+    // Gerar assinatura simples para ver se a tela mudou
+    final signature = "${snapshot.nodes.length}_${snapshot.nodes.first.id}";
+    if (signature == _lastSnapshotSignature) return; 
+    _lastSnapshotSignature = signature;
 
     // Determinar se precisa criar novo grupo ou usar o atual
     final now = DateTime.now();

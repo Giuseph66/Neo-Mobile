@@ -45,8 +45,7 @@ class InspectorAccessibilityService : AccessibilityService() {
         instance = this
         windowManager = getSystemService(WINDOW_SERVICE) as? android.view.WindowManager
         
-        // Initialize WebSocket
-        webSocketManager = WebSocketManager("ws://10.0.2.2:7071").apply {
+        webSocketManager = WebSocketManager("ws://127.0.0.1:7071").apply {
             connect()
         }
     }

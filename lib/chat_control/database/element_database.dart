@@ -91,43 +91,37 @@ class ElementDatabase {
     );
   }
 
-  // Salvar elementos de um snapshot (sem duplicatas)
+  // Salvar elementos de um snapshot (usando Batch para alta performance)
   Future<void> saveElements(
     int groupId,
     List<ElementRecord> elements,
   ) async {
     final db = await database;
+    final batch = db.batch();
 
-    // Usar transação para garantir atomicidade
-    await db.transaction((txn) async {
-      for (final element in elements) {
-        // Verificar se já existe (UNIQUE constraint)
-        // Se existir, ignorar (não inserir duplicata)
-        try {
-          await txn.insert(
-            'elements',
-            {
-              'group_id': groupId,
-              'text': element.text,
-              'path': element.path,
-              'position_left': element.positionLeft,
-              'position_top': element.positionTop,
-              'position_right': element.positionRight,
-              'position_bottom': element.positionBottom,
-              'className': element.className,
-              'view_id': element.viewId,
-              'clickable': element.clickable ? 1 : 0,
-              'scrollable': element.scrollable ? 1 : 0,
-              'enabled': element.enabled ? 1 : 0,
-              'created_at': DateTime.now().millisecondsSinceEpoch,
-            },
-            conflictAlgorithm: ConflictAlgorithm.ignore, // Ignorar duplicatas
-          );
-        } catch (e) {
-          // Ignorar erros de duplicata
-        }
-      }
-    });
+    for (final element in elements) {
+      batch.insert(
+        'elements',
+        {
+          'group_id': groupId,
+          'text': element.text,
+          'path': element.path,
+          'position_left': element.positionLeft,
+          'position_top': element.positionTop,
+          'position_right': element.positionRight,
+          'position_bottom': element.positionBottom,
+          'className': element.className,
+          'view_id': element.viewId,
+          'clickable': element.clickable ? 1 : 0,
+          'scrollable': element.scrollable ? 1 : 0,
+          'enabled': element.enabled ? 1 : 0,
+          'created_at': DateTime.now().millisecondsSinceEpoch,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+
+    await batch.commit(noResult: true);
   }
 
   // Buscar grupo mais recente ou criar novo

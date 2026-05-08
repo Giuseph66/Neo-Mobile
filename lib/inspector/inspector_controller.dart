@@ -25,7 +25,7 @@ class InspectorController extends ChangeNotifier with WidgetsBindingObserver {
   List<InspectorNode> _allNodes = const [];
   final InspectorWebSocketClient _webSocketClient;
   bool _streamingEnabled = false;
-  String _streamUrl = 'ws://192.168.0.25:7071';
+  String _streamUrl = 'ws://127.0.0.1:7071';
 
   bool get enabled => _enabled;
   bool get showRects => _showRects;

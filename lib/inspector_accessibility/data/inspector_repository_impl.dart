@@ -197,6 +197,18 @@ class InspectorRepositoryImpl implements InspectorRepository {
   }
 
   @override
+  Future<void> setWebSocketUrl(String url) async {
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'setWebSocketUrl',
+        {'url': url},
+      );
+    } catch (e) {
+      // Ignorar
+    }
+  }
+
+  @override
   Future<void> sendLog(String message, {String level = 'info'}) async {
     try {
       await _methodChannel.invokeMethod<void>(

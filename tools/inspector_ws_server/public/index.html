@@ -41,6 +41,25 @@
               <button id="clearBtn">Limpar</button>
             </div>
           </div>
+          <div class="canvas-filters">
+            <div class="filter-group">
+              <span class="filter-label">Mostrar:</span>
+              <button class="filter-chip active" data-type="fill" title="Ativar/desativar preenchimento dos boxes">■ Fill</button>
+              <button class="filter-chip active" data-type="labels" title="Ativar/desativar labels dos componentes">A Labels</button>
+              <button class="filter-chip active" data-type="layers" title="Destacar componentes em camadas superiores (Modais)">⚡ Layers</button>
+            </div>
+            <div class="filter-sep"></div>
+            <div class="filter-group">
+              <span class="filter-label">Tipos:</span>
+              <button class="filter-chip cat active" data-cat="any"      title="Componentes genéricos (View, ScrollView...)">● Geral</button>
+              <button class="filter-chip cat active" data-cat="button"   title="Botões">● Button</button>
+              <button class="filter-chip cat active" data-cat="input"    title="Campos de texto">● Input</button>
+              <button class="filter-chip cat active" data-cat="tappable" title="Áreas clicáveis">● Tappable</button>
+              <button class="filter-chip cat active" data-cat="card"     title="Cards">● Card</button>
+              <button class="filter-chip cat active" data-cat="listItem" title="Itens de lista">● ListItem</button>
+            </div>
+          </div>
+          <div class="canvas-hint">🖱 Clique = tap · Arraste = swipe</div>
           <div class="canvas-wrap">
             <canvas id="canvas"></canvas>
           </div>
